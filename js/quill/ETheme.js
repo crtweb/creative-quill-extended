@@ -49,15 +49,52 @@ class ETheme extends Theme {
         const file = input.files[0];
         if (!/^image\//.test(file.type)) return;
 
-        const uploaded = await uploader.upload(file);
-        if (!uploaded.hasOwnProperty('uploaded') || uploaded.uploaded !== true)
-          return;
-
+        const parameters = {};
         const range = this.quill.getSelection();
-        this.quill.insertEmbed(range.index, 'image', uploaded.url);
+        if (this.quill.options.uploadAsync) {
+          // https://stackoverflow.com/a/44078785/3168103
+          let u = Date.now().toString(16) + Math.random().toString(16) + '0'.repeat(16);
+          let uuid = [u.substr(0,8), u.substr(8,4), '4000-8' + u.substr(13,3), u.substr(16,12)].join('-');
+
+          const size = file.size
+          const chunkSize = 1024  * 1024
+          const count = Math.ceil(size / chunkSize);
+          for (let i = 0; i < count; i++) {
+            let from = chunkSize * i;
+            let piece = file.slice(from, (from + chunkSize), file.type);
+
+            const fd = new FormData();
+            fd.append('upload', piece);
+            fd.append('_chunkSize', chunkSize + '');
+            fd.append('_currentChunkSize', piece.size);
+            fd.append('_chunkNumber', i + '');
+            fd.append('_totalSize', size + '');
+            fd.append('_uniqueId', uuid);
+            fd.append('type', this.quill.uploadType || 'image');
+
+            const result = await this.asyncUpload(uploader, fd);
+            if (result.hasOwnProperty('url') && result.url !== null) {
+              this.quill.insertEmbed(range.index, 'image', result.url);
+            }
+          }
+        } else {
+          this.quill.insertEmbed(range.index, 'image', await this.syncUpload(uploader, file, parameters));
+        }
       }
       input.click();
     }
+  }
+
+  async asyncUpload(uploader, fd) {
+    return uploader.asyncUpload(fd).then(data => data);
+  }
+
+  async syncUpload(uploader, file, parameters) {
+    const uploaded = await uploader.upload(file, parameters);
+    if (!uploaded.hasOwnProperty('uploaded') || uploaded.uploaded !== true)
+      return;
+
+    return uploaded.url;
   }
 }
 
