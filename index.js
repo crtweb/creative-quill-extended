@@ -1,4 +1,4 @@
-import '../css/app.scss';
+import './css/app.scss';
 import 'quill/dist/quill.core.css'
 import 'quill/dist/quill.snow.css'
 
